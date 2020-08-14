@@ -1,0 +1,18 @@
+app_id: rpost-splunk
+app_name: splunk-test
+app_description: rpost-splunk
+app_business_unit: rpost
+app_source_market: imsd
+app_environments:
+#  - env_name: dev
+#    env_account_number: 123456789001
+#    env_deployment_role: cmap-mf-gitlab-deployment-role
+#  - env_name: test
+#    env_account_number: 123456789002
+#    env_deployment_role: cmap-mf-gitlab-deployment-role
+  - env_name: dev
+    env_account_number: 880013969777
+    env_deployment_role: rpost-dev-gitlab-deployment-role
+    env_statefile_bucket: true
+app_tier: normal
+app_classification: normal

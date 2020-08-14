@@ -1,0 +1,8 @@
+id: "rpost-splunk"
+name: "rpost-splunk"
+type: application
+owner: rpost-vish
+description: "rpost-splunk"
+vcsroot: https://bitbucket.org/tuigroup/cmap-mf-suresh-test-infra
+lifecycle: 
+version: ""

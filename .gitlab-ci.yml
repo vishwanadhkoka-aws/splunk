@@ -1,0 +1,93 @@
+image:
+  name: registry.git.mf.tuigroup.com/tools/docker-infra-deployment:tf-0.12
+  entrypoint:
+    - '/usr/bin/env'
+    - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+
+before_script:
+  # General
+  - export ROOTDIR=$(pwd)
+  - echo $ROOTDIR
+
+  # SSH
+  - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+  - eval $(ssh-agent -s)
+  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+  - echo "$SSH_ACCOUNT_PRIVKEY" | tr -d '\r' | ssh-add - > /dev/null
+  - mkdir -p ~/.ssh
+  - chmod 700 ~/.ssh
+  - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+
+  # Ansible
+  - echo 'Ansible refuses to read from a world-writeable folder, hence' && chmod -v 700 $ROOTDIR/src/compute
+  - cd $ROOTDIR/..
+  - git -C cmap-mf-ansible-serversetup pull || git clone git@bitbucket.org:tuigroup/cmap-mf-ansible-serversetup.git
+  - cd $ROOTDIR
+
+  # Terraform
+  - rm -rf .terraform
+  - terraform --version
+  - cd src/compute && terraform init
+
+stages:
+  - validate
+  - plan
+  - apply
+ 
+
+# Environment: prod
+###################
+
+validate_prod:
+  stage: validate
+  script:
+    - cd ../compute && terraform validate -var-file=deployment/prod.tfvars
+
+  environment:
+    name: prod
+
+plan_prod:
+  stage: plan
+  script:
+    - cd ../compute
+    - terraform workspace select prod || terraform workspace new prod
+    - terraform plan -out "planfile" -var-file=deployment/prod.tfvars
+
+  dependencies:
+    - validate_prod
+  artifacts:
+    paths:
+      - src/compute/planfile
+
+  environment:
+    name: prod
+
+apply_prod:
+  stage: apply
+  script:
+    # Files needed from S3 bucket
+    - mkdir /var/tmp/mcafee
+    - aws s3 cp s3://mfactory-software/linux/av/ISecTP-10.6.2-103-Release-standalone.tar.gz /var/tmp/mcafee/
+    - aws s3 cp s3://mfactory-software/linux/av/install_agent.sh /var/tmp/mcafee/
+
+    - mkdir /var/tmp/checkmk
+    - aws s3 cp s3://mfactory-software/linux/checkmk/cmk-exec-command.sh /var/tmp/checkmk/
+    - chmod +x /var/tmp/checkmk/cmk-exec-command.sh
+    - echo "10.148.1.84 checkmk.tui.de" >> /etc/hosts
+
+    - mkdir /var/tmp/timaint
+    - aws s3 cp s3://mfactory-software/timaint/postemsg /var/tmp/timaint/
+    - aws s3 cp s3://mfactory-software/timaint/postemsg.conf /var/tmp/timaint/
+    - aws s3 cp s3://mfactory-software/timaint/timaint.pl /var/tmp/timaint/
+    - aws s3 cp s3://mfactory-software/timaint/wpostemsg /var/tmp/timaint/
+    - aws s3 cp s3://mfactory-software/timaint/wpostemsg.conf /var/tmp/timaint/
+
+    # Terraform
+    - cd $ROOTDIR/src
+    - cd ./compute && terraform workspace select prod && terraform apply -input=false "planfile"
+
+  dependencies:
+    - plan_prod
+  when: manual
+  environment:
+    name: prod
